@@ -1,0 +1,26 @@
+services:
+  wise:
+    image: ${WISEDB_IMAGE:-winnergd/wise:v2.1}
+    environment:
+      WISEDB_API_KEY: ${WISEDB_API_KEY:-}
+      WISEDB_SQLITE_PATH: /app/data/wisedb.sqlite
+    volumes:
+      - wisedb_data:/app/data
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  wisedb_data:

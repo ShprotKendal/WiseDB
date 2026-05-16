@@ -1,0 +1,2 @@
+# Editable: viz + сервер в RAM + MCP + dev
+-e .[viz,server,mcp,dev]
