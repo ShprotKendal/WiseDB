@@ -1,0 +1,9 @@
+---
+description: WiseDB product invariants — graph database server, not a wiki REST app
+alwaysApply: true
+---
+
+- WiseDB HTTP is a **database server**: named databases under `data/databases/`, sessions, grants, WQL `POST /databases/{name}/execute`. Do not reintroduce `/v1/*` or `X-API-Key` on the server.
+- **No second default wiki root** for HTTP. Admin catalog lives in `data/_catalog/`. Library/MCP may still open a single path locally; that is not the server model.
+- Data access: **WQL** (and WebSocket streaming) for scripting, search, graph walks, and `SCHEMA`; **REST under `/databases/{name}`** for nodes, keyword search (`GET .../search?q=`), raw markdown content, folder tree, and layout mutations (`/tree`, `/nodes`, `/folders`). Both call the same `Wiki` / C engine — no parallel storage layer. Exception: binary media remains `GET .../nodes/{slug}/payload`.
+- `Wiki` in Python is the v3 storage handle for one database directory; treat it as an engine adapter, not the product name for HTTP.

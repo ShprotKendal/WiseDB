@@ -1,84 +1,103 @@
-"""Зависимости FastAPI (аутентификация БД и админ-ключ)."""
+"""FastAPI dependencies."""
 
 from __future__ import annotations
 
-from typing import Annotated
+import re
+import threading
 
-from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi import HTTPException, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from wisedb.server.config import Settings, get_settings
-from wisedb.server.database_manager import DatabaseAuthError, DatabaseManager
-from wisedb.server.memory_engine import NeuralContextDB
+from wisedb.memory import Wiki
+from wisedb.server.catalog import get_catalog
+from wisedb.server.config import SYSTEM_WIKI_DATABASE, get_settings
+from wisedb.server.permissions import privilege_allows
+from wisedb.server.sessions import get_session_store
+from wisedb.server.users import User
 
+_DB_NAME = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
 
-def get_db_manager(request: Request) -> DatabaseManager:
-    return request.app.state.db_manager
-
-
-ManagerDep = Annotated[DatabaseManager, Depends(get_db_manager)]
-
-
-async def verify_admin_api_key(
-    request: Request,
-    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
-    settings: Settings = Depends(get_settings),
-) -> None:
-    req_key = _extract_bearer_or_header(request, x_api_key)
-    expected = settings.api_key
-    if not expected:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="WISEDB_API_KEY не задан (нужен для администрирования баз /v1/databases/*)",
-        )
-    if req_key != expected:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="неверный или отсутствующий API-ключ",
-        )
+_wiki_lock = threading.RLock()
+_wiki_instances: dict[str, Wiki] = {}
 
 
-def _extract_bearer_or_header(request: Request, x_api_key: str | None) -> str | None:
-    if x_api_key is not None:
-        return x_api_key
-    auth = request.headers.get("Authorization")
-    if auth and auth.lower().startswith("bearer "):
-        return auth.split(" ", 1)[1].strip()
-    return None
+def validate_database_name(name: str) -> str:
+    name = name.strip()
+    if name == SYSTEM_WIKI_DATABASE:
+        return name
+    if not _DB_NAME.fullmatch(name):
+        raise HTTPException(status_code=422, detail="invalid database name")
+    return name
 
 
-async def get_authenticated_store(
-    request: Request,
-    manager: ManagerDep,
-    x_wisedb_database: str | None = Header(default=None, alias="X-WiseDB-Database"),
-    x_wisedb_password: str | None = Header(default=None, alias="X-WiseDB-Password"),
-) -> NeuralContextDB:
-    """
-    Агент: передавайте идентификатор базы и пароль.
-    Либо заголовки X-WiseDB-Database / X-WiseDB-Password,
-    либо Authorization: Bearer <db_id>:<password>.
-    """
-    db_id = x_wisedb_database
-    password = x_wisedb_password
-    if db_id is None or password is None:
-        auth = request.headers.get("Authorization")
-        if auth and auth.lower().startswith("bearer "):
-            token = auth.split(" ", 1)[1].strip()
-            if ":" in token:
-                db_id, password = token.split(":", 1)
-    if not db_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="нет заголовка X-WiseDB-Database (или Authorization: Bearer <база>:<пароль>)",
-        )
-    if password is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="нет заголовка X-WiseDB-Password",
-        )
-    try:
-        return await manager.authenticate(db_id, password)
-    except DatabaseAuthError as e:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
+def is_reserved_database_name(name: str) -> bool:
+    return name == SYSTEM_WIKI_DATABASE
 
 
-StoreDep = Annotated[NeuralContextDB, Depends(get_authenticated_store)]
+def system_wiki_enabled() -> bool:
+    return get_settings().system_wiki
+
+
+def get_database_wiki(name: str) -> Wiki:
+    db_name = validate_database_name(name)
+    catalog = get_catalog()
+    if not catalog.database_exists(db_name):
+        raise HTTPException(status_code=404, detail="database not found")
+    settings = get_settings()
+    root = settings.database_root(db_name)
+    root.mkdir(parents=True, exist_ok=True)
+    resolved = root.resolve(strict=True)
+    with _wiki_lock:
+        cached = _wiki_instances.get(db_name)
+        if cached is not None and cached.root.resolve(strict=True) == resolved:
+            return cached
+        if cached is not None:
+            cached.close()
+        wiki = Wiki(resolved)
+        _wiki_instances[db_name] = wiki
+        return wiki
+
+
+def close_wiki() -> None:
+    with _wiki_lock:
+        for wiki in _wiki_instances.values():
+            wiki.close()
+        _wiki_instances.clear()
+
+
+_bearer_scheme = HTTPBearer(
+    auto_error=False,
+    description=(
+        "Session token from `POST /auth/login`. Send as "
+        "`Authorization: Bearer <token>` on protected routes."
+    ),
+)
+
+
+def require_bearer(
+    credentials: HTTPAuthorizationCredentials | None = Security(_bearer_scheme),
+) -> User:
+    store = get_session_store()
+    if not store.is_configured:
+        raise HTTPException(status_code=503, detail="session authentication is not configured")
+    token = credentials.credentials if credentials is not None else None
+    user = store.authenticate(token)
+    if user is None:
+        raise HTTPException(status_code=401, detail="invalid or expired session")
+    if user.disabled:
+        raise HTTPException(status_code=401, detail="user is disabled")
+    return user
+
+
+def require_root(user: User = Security(require_bearer)) -> User:
+    if not user.is_root:
+        raise HTTPException(status_code=403, detail="root required")
+    return user
+
+
+def database_privileges(user: User, database: str) -> frozenset[str]:
+    if database == SYSTEM_WIKI_DATABASE and system_wiki_enabled():
+        return frozenset({"read"})
+    if user.is_root:
+        return frozenset({"read", "write", "admin"})
+    return get_catalog().privileges_on(user.id, database)

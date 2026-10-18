@@ -8,16 +8,16 @@ read_version() {
   python3 -c "import tomllib; print(tomllib.load(open('${ROOT}/pyproject.toml', 'rb'))['project']['version'])"
 }
 
-# Local tag used by compose by default, e.g. wise:2.1.0
+# Local tag, e.g. wise:3.0.0
 local_image() {
   local version="${1:-$(read_version)}"
   echo "wise:${version}"
 }
 
-# Release alias used for Docker Hub marketing tags, e.g. 2.1.0 -> v2.1
+# Release tag used for Docker Hub, e.g. 3.0.0 -> v3.0.0
 release_tag() {
   local version="${1:-$(read_version)}"
-  echo "v${version%.*}"
+  echo "v${version}"
 }
 
 # Registry image, e.g. ghcr.io/you/wisedb — set WISEDB_IMAGE (without tag)

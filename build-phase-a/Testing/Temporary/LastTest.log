@@ -1,0 +1,78 @@
+Start testing: Oct 03 22:08 +05
+----------------------------------------------------------
+1/5 Testing: core
+1/5 Test: core
+Command: "/Users/nazar/Projects/WiseDB/build-phase-a/wisedb_test_c"
+Directory: /Users/nazar/Projects/WiseDB/build-phase-a
+"core" start time: Oct 03 22:08 +05
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.70 sec
+----------------------------------------------------------
+Test Passed.
+"core" end time: Oct 03 22:08 +05
+"core" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/5 Testing: wal
+2/5 Test: wal
+Command: "/Users/nazar/Projects/WiseDB/build-phase-a/wisedb_test_wal"
+Directory: /Users/nazar/Projects/WiseDB/build-phase-a
+"wal" start time: Oct 03 22:08 +05
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.33 sec
+----------------------------------------------------------
+Test Passed.
+"wal" end time: Oct 03 22:08 +05
+"wal" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/5 Testing: batch
+3/5 Test: batch
+Command: "/Users/nazar/Projects/WiseDB/build-phase-a/wisedb_test_batch"
+Directory: /Users/nazar/Projects/WiseDB/build-phase-a
+"batch" start time: Oct 03 22:08 +05
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.30 sec
+----------------------------------------------------------
+Test Passed.
+"batch" end time: Oct 03 22:08 +05
+"batch" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/5 Testing: sstable
+4/5 Test: sstable
+Command: "/Users/nazar/Projects/WiseDB/build-phase-a/wisedb_test_sstable"
+Directory: /Users/nazar/Projects/WiseDB/build-phase-a
+"sstable" start time: Oct 03 22:08 +05
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.32 sec
+----------------------------------------------------------
+Test Passed.
+"sstable" end time: Oct 03 22:08 +05
+"sstable" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/5 Testing: manifest
+5/5 Test: manifest
+Command: "/Users/nazar/Projects/WiseDB/build-phase-a/wisedb_test_manifest"
+Directory: /Users/nazar/Projects/WiseDB/build-phase-a
+"manifest" start time: Oct 03 22:08 +05
+Output:
+----------------------------------------------------------
+<end of output>
+Test time =   0.30 sec
+----------------------------------------------------------
+Test Passed.
+"manifest" end time: Oct 03 22:08 +05
+"manifest" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 03 22:08 +05

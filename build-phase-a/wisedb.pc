@@ -1,0 +1,9 @@
+prefix=/usr/local
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: wisedb
+Description: WiseDB agent memory core library
+Version: 3.0.0
+Libs: -L${libdir} -lwisedb -lm
+Cflags: -I${includedir}

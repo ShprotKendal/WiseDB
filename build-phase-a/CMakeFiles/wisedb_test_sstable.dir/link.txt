@@ -1,0 +1,1 @@
+/usr/bin/clang -g -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/wisedb_test_sstable.dir/src/c/codec.c.o CMakeFiles/wisedb_test_sstable.dir/src/c/sstable.c.o CMakeFiles/wisedb_test_sstable.dir/tests/c/test_sstable.c.o -o wisedb_test_sstable

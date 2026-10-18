@@ -1,26 +1,18 @@
 services:
-  wise:
+  wisedb:
     build: .
-    container_name: wisedb
-    environment:
-      WISEDB_API_KEY: ${WISEDB_API_KEY:-}
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
+    environment:
+      WISEDB_DATA_DIR: /app/data
+      WISEDB_ROOT_PASSWORD: "${WISEDB_ROOT_PASSWORD:?Set WISEDB_ROOT_PASSWORD before starting WiseDB}"
     volumes:
       - wisedb_data:/app/data
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
       interval: 10s
       timeout: 5s
       retries: 3
-      start_period: 15s
-    restart: unless-stopped
 
 volumes:
   wisedb_data:

@@ -1,17 +1,19 @@
-"""Запуск API WiseDB через Uvicorn."""
+"""CLI entrypoint for wisedb-server."""
 
 from __future__ import annotations
 
+import uvicorn
+
+from wisedb.server.config import get_settings
+
 
 def main() -> None:
-    import uvicorn
-
+    settings = get_settings()
     uvicorn.run(
         "wisedb.server.app:app",
-        host="0.0.0.0",
-        port=8000,
-        proxy_headers=True,
-        forwarded_allow_ips="*",
+        host=settings.host,
+        port=settings.port,
+        reload=False,
     )
 
 

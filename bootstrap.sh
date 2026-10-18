@@ -8,15 +8,13 @@ if [[ ! -d .venv ]]; then
 fi
 
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/pip install -e ".[viz,server,mcp,dev]"
+.venv/bin/pip install -e ".[server,mcp,dev]"
 
 echo ""
-echo "Готово. Активация (zsh/bash):"
+echo "Ready. Activate (zsh/bash):"
 echo "  source \"$ROOT/.venv/bin/activate\""
 echo ""
-echo "Проверка:"
-echo "  python -m wisedb"
-echo "  wisedb-viz --demo"
+echo "Quick checks:"
 echo "  pytest"
 echo "  wisedb-server"
 echo ""

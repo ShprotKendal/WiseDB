@@ -1,0 +1,28 @@
+# Development: HTTP server with auto-reload on Python changes under bind mounts.
+# Rebuild the image after C/Cython core or pyproject changes:
+#   docker compose -f docker-compose.dev.yml build
+#
+#   export WISEDB_ROOT_PASSWORD='dev-only-password'
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# API docs: http://127.0.0.1:8000/docs
+
+services:
+  wisedb:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      WISEDB_DATA_DIR: /app/data
+      WISEDB_HOST: 0.0.0.0
+      WISEDB_PORT: 8000
+      WISEDB_ROOT_PASSWORD: "${WISEDB_ROOT_PASSWORD:-dev-root-change-me}"
+    volumes:
+      # Hot-reload targets (see Dockerfile.dev --reload-dir). Do not mount the whole
+      # package tree: that would replace the Linux Cython extension with the host build.
+      - ./src/wisedb/server:/app/src/wisedb/server
+      - ./src/wisedb/wql:/app/src/wisedb/wql
+      - ./src/wisedb/memory.py:/app/src/wisedb/memory.py
+      - ./data:/app/data

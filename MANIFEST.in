@@ -1,0 +1,8 @@
+include LICENSE
+include include/wisedb.h
+include include/wisedb.hpp
+include src/wisedb/_engine.pyx
+recursive-include src/c *.c
+recursive-include src/c *.h
+recursive-include cmake *
+recursive-include src/wisedb/system_wiki *.md

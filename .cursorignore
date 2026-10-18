@@ -1,0 +1,39 @@
+# Python / packaging
+.venv/
+__pycache__/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local env and data
+.env
+.env.*
+!.env.example
+data/
+*.sqlite
+*.sqlite3
+*.db
+.smoke_*.sqlite
+
+# Generated C extension
+src/wisedb/_engine.c
+
+# CMake / native build trees
+build-phase-a/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Testing/
+*.o
+*.a
+*.so
+*.dylib
+*.d
+
+# OS
+.DS_Store

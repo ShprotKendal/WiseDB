@@ -1,189 +1,315 @@
-"""Схемы Pydantic для HTTP API."""
+"""Pydantic schemas for HTTP API."""
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-class ChunkAttachmentUpsert(BaseModel):
-    """Данные вложения (слот см. wisedb://… в WiseDoc)."""
+class WqlExecuteRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"query": "SCHEMA"}],
+        }
+    )
 
-    slot: str = Field(..., min_length=1, max_length=256)
-    mime: str = Field(default="application/octet-stream", max_length=256)
-    uri: Optional[str] = Field(default=None, description="Внешний URL, если байты не хранятся")
-    data_base64: Optional[str] = Field(
-        default=None,
-        description="Base64 байтов (пропустите, если только uri)",
+    query: str = Field(
+        ...,
+        min_length=1,
+        max_length=64 * 1024,
+        description="WQL statement to run against the target database.",
+        examples=["SCHEMA", "SELECT * FROM pages WHERE slug = 'redis'"],
     )
 
 
-class ChunkUpsertItem(BaseModel):
-    id: Optional[uuid.UUID] = None
-    external_key: Optional[str] = None
-    title: str = ""
-    body: str = ""
-    body_format: Literal["plain", "wisedoc"] = "plain"
-    tags: list[str] = Field(default_factory=list)
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    embedding: Optional[list[float]] = None
-    attachments: list[ChunkAttachmentUpsert] = Field(default_factory=list)
-
-
-class ChunksUpsertRequest(BaseModel):
-    tenant_id: str = "default"
-    chunks: list[ChunkUpsertItem]
-
-
-class EdgeUpsertItem(BaseModel):
-    id: Optional[uuid.UUID] = None
-    source_chunk_id: uuid.UUID
-    target_chunk_id: uuid.UUID
-    weight: float = Field(default=0.85, gt=0, le=1)
-    directed: bool = False
-    relation_type: Optional[str] = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class EdgesUpsertRequest(BaseModel):
-    tenant_id: str = "default"
-    edges: list[EdgeUpsertItem]
-
-
-class RetrieveRequest(BaseModel):
-    tenant_id: str = "default"
-    query: str
-    query_embedding: Optional[list[float]] = None
-    top_k_dense: int = 20
-    top_k_lexical: int = 20
-    max_hops: int = 5
-    hop_decay: float = 0.9
-    max_nodes: int = 48
-    rrf_k: int = 60
-    return_markdown: bool = True
-    gaze_aware: bool = True
-    suppress_behind: bool = True
-    include_opposition: bool = False
-    gaze_anchor_chunk_id: Optional[uuid.UUID] = Field(
-        default=None,
-        description="Якорь для секторов «взгляда» в markdown; по умолчанию — топ чанк после fusion.",
+class WqlParseResponse(BaseModel):
+    statement: str = Field(
+        description="Parsed statement kind, such as `select`, `insert`, or `create_folder`.",
+        examples=["select"],
+    )
+    privilege: str = Field(
+        description="Privilege required to run the statement: `read` or `write`.",
+        examples=["read"],
+    )
+    allowed: bool = Field(description="Whether the caller holds that privilege on this database.")
+    streaming: bool = Field(
+        default=False,
+        description="True when the statement uses WS[] (WebSocket streaming only).",
     )
 
 
-class RetrievedChunk(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    title: str
-    body: str
-    score: float
-    hop_distance: int = 0
-    dense_rank: Optional[int] = None
-    lexical_rank: Optional[int] = None
-    metadata: dict[str, Any] = Field(default_factory=dict)
-    tags: list[str] = Field(default_factory=list)
-
-
-class RetrieveResponse(BaseModel):
-    chunks: list[RetrievedChunk]
-    markdown: Optional[str] = None
-
-
-class SleepRequest(BaseModel):
-    tenant_id: str = "default"
-    phase: Literal["decay_prune", "geometry_refresh", "llm_optimize"] = "decay_prune"
-    dry_run: bool = False
-    decay_factor: float = Field(default=0.95, gt=0, le=1)
-    min_weight: float = Field(default=0.05, gt=0, le=1)
-    delete_orphan_chunks: bool = False
-    skip_reinforced_within_hours: float = Field(
-        default=0.0,
-        ge=0,
-        description="Не ослаблять рёбра, усиленные retrieve за последние N часов.",
-    )
-    llm_api_key: Optional[str] = Field(
-        default=None,
-        repr=False,
-        description="API-ключ OpenAI-совместимого API на запрос для llm_optimize; затирает env, не пишется в журнал.",
-    )
-    llm_base_url: Optional[str] = Field(
-        default=None,
-        description="Базовый URL OpenAI-совместимого API для llm_optimize (на запрос).",
-    )
-    llm_model: Optional[str] = Field(
-        default=None,
-        description="Имя модели для llm_optimize (на запрос).",
-    )
-    llm_max_chunks: int = Field(
-        default=24,
-        ge=1,
-        le=200,
-        description="Макс. число «живых» чанков, отправляемых в LLM.",
-    )
-    llm_max_actions: int = Field(
-        default=12,
-        ge=1,
-        le=50,
-        description="Макс. число действий update/split в ответе LLM.",
+class WqlBatchRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "queries": [
+                        "SCHEMA",
+                        "SELECT * FROM pages WHERE slug = 'redis'",
+                    ]
+                }
+            ],
+        }
     )
 
+    queries: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=32,
+        description="WQL statements to run in order, at most 32. Each statement is at most 64 KiB.",
+    )
 
-class SleepResponse(BaseModel):
-    run_id: str
-    status: str
-    stats: dict[str, Any]
-    error: Optional[str] = None
-
-
-class DatabaseCreateRequest(BaseModel):
-    id: str = Field(..., min_length=1, max_length=64, pattern=r"^[a-z][a-z0-9_-]{0,63}$")
-    password: str = Field(..., min_length=1, max_length=256)
-    name: Optional[str] = Field(default=None, max_length=256)
-
-
-class DatabasePasswordRequest(BaseModel):
-    password: str = Field(..., min_length=1, max_length=256)
+    @field_validator("queries")
+    @classmethod
+    def _bounded_statements(cls, queries: list[str]) -> list[str]:
+        for index, query in enumerate(queries, start=1):
+            if not query or len(query) > 64 * 1024:
+                raise ValueError(f"query {index} must be 1 to 65536 characters")
+        return queries
 
 
-class DatabasePublic(BaseModel):
-    id: str
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"username": "root", "password": "your-root-password"}],
+        }
+    )
+
+    username: str = Field(..., min_length=1, max_length=128, description="Catalog username or `root`.")
+    password: str = Field(..., min_length=1, max_length=256, description="Account password.")
+
+
+class LoginResponse(BaseModel):
+    token: str = Field(description="Bearer token for the `Authorization` header.")
+    session_id: str = Field(description="Opaque session identifier.")
+    user: dict[str, str | bool] = Field(description="Public profile of the authenticated user.")
+
+
+class CreateUserRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"username": "agent", "password": "long-random-password"}],
+        }
+    )
+
+    username: str = Field(..., min_length=1, max_length=128, description="Unique catalog username.")
+    password: str = Field(..., min_length=8, max_length=256, description="Initial password (min 8 characters).")
+
+
+class SetPasswordRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"password": "new-long-random-password"}],
+        }
+    )
+
+    password: str = Field(..., min_length=8, max_length=256, description="New password (min 8 characters).")
+
+
+class GrantRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"privileges": ["read"]}],
+        }
+    )
+
+    privileges: list[str] = Field(
+        ...,
+        min_length=1,
+        description="Database privileges to assign: `read`, `write`, and/or `admin`.",
+        examples=[["read"], ["read", "write"]],
+    )
+
+
+class GrantRecord(BaseModel):
+    database: str = Field(description="Database name.")
+    privileges: list[str] = Field(description="Granted privileges on that database.")
+
+
+class UserResponse(BaseModel):
+    id: str = Field(description="Stable user identifier.")
+    username: str
+    created_at: str = Field(description="ISO timestamp when the user was created.")
+    disabled: bool = Field(description="Whether login is blocked for this user.")
+    grants: list[GrantRecord] = Field(default_factory=list, description="Per-database privilege grants.")
+
+
+class CreateDatabaseRequest(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [{"name": "my-agent"}],
+        }
+    )
+
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=64,
+        description="Alphanumeric database name (may include `_` and `-`).",
+        examples=["my-agent"],
+    )
+
+
+class DatabaseListResponse(BaseModel):
+    databases: list[str] = Field(description="Names visible to the caller.")
+
+
+class StatusResponse(BaseModel):
+    status: str = Field(description="Operation outcome, typically `ok`.")
+
+
+class CreateDatabaseResponse(BaseModel):
     name: str
-    created_at: datetime
+    status: str
 
 
-class ChunkListItem(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    title: str
-    external_key: Optional[str] = None
+class GrantSetResponse(BaseModel):
+    user_id: str
+    database: str
+    privileges: list[str]
 
 
-class AttachmentPublic(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    slot: str
-    mime: str
-    uri: Optional[str] = None
-    byte_length: int = 0
+class OpticGrantRequest(BaseModel):
+    privileges: list[str] = Field(
+        default_factory=list,
+        description="Optic privileges: `view`, `edit`, and/or `delete`. Empty list denies all optic access.",
+        examples=[["view", "edit"]],
+    )
 
 
-class ChunkPublic(BaseModel):
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+class OpticGrantSetResponse(BaseModel):
+    user_id: str
+    database: str
+    optic: str
+    privileges: list[str]
 
-    id: uuid.UUID
-    tenant_id: str
-    external_key: Optional[str]
-    title: str
-    body: str
-    tags: list[str]
-    metadata: dict[str, Any] = Field(validation_alias="metadata_json")
-    attachments: list[AttachmentPublic] = Field(default_factory=list)
-    version: int
-    deleted_at: Optional[datetime] = None
-    created_at: datetime
-    updated_at: datetime
+
+class OpticCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=64, description="Custom optic name (lowercase).")
+    description: str = Field(default="", max_length=4096, description="Optional human-readable description.")
+    kind: str = Field(
+        default="markdown",
+        description="Immutable data type: markdown, json, image, video, link, file, or span.",
+    )
+
+
+class OpticPatchRequest(BaseModel):
+    description: str = Field(..., max_length=4096, description="Updated optic description.")
+
+
+class OpticRecordResponse(BaseModel):
+    name: str
+    description: str
+    kind: str = Field(default="markdown", description="Immutable optic data type.")
+    privileges: list[str] = Field(description="Effective optic privileges for the caller.")
+    builtin: bool = Field(default=False, description="True for the built-in `content` optic.")
+
+
+class OpticListResponse(BaseModel):
+    optics: list[OpticRecordResponse]
+
+
+class OpticTextResponse(BaseModel):
+    slug: str
+    optic: str
+    kind: str = Field(default="markdown")
+    text: str = Field(default="")
+    path: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+    sha256: str | None = None
+    bound: bool | None = None
+    has_bytes: bool | None = None
+    filename: str | None = None
+    media_type: str | None = None
+    size: int | None = None
+
+
+class OpticTextPutRequest(BaseModel):
+    text: str | None = Field(default=None, description="UTF-8 text for markdown, json, link, or span edit.")
+    path: str | None = Field(default=None, description="Relative file path for span bind.")
+    start_line: int | None = Field(default=None, description="Inclusive start line for span bind.")
+    end_line: int | None = Field(default=None, description="Inclusive end line for span bind.")
+    base_sha256: str | None = Field(default=None, description="Fragment hash from last span read for edits.")
+
+
+class NodeCreateRequest(BaseModel):
+    slug: str = Field(..., min_length=1, max_length=256, description="Canonical node slug.")
+    markdown: str | None = Field(default=None, description="WikiLLM markdown document (required unless file_base64).")
+    rel_path: str | None = Field(default=None, description="Wiki-relative file path for the stored page or media.")
+    file_base64: str | None = Field(default=None, description="Base64-encoded media bytes (max 25 MiB decoded).")
+
+
+class NodePatchRequest(BaseModel):
+    type: str | None = Field(default=None, description="WikiLLM page type.")
+    title: str | None = None
+    summary: str | None = None
+    body: str | None = Field(default=None, description="Markdown body without frontmatter.")
+
+
+class NodePutRequest(BaseModel):
+    markdown: str = Field(..., min_length=1, description="Full WikiLLM document replacing the node.")
+
+
+class DatabaseSettingsResponse(BaseModel):
+    semantics: bool = Field(
+        description="When true, `{{page title}}` in titles and bodies creates `links_to` edges.",
+    )
+    code_root: str | None = Field(
+        default=None,
+        description="Absolute checkout path for span optics on this machine.",
+    )
+
+
+class DatabaseSettingsPatchRequest(BaseModel):
+    semantics: bool | None = Field(
+        default=None,
+        description="Enable or disable semantic title mentions as automatic graph links.",
+    )
+    code_root: str | None = Field(
+        default=None,
+        description="Absolute checkout path for span optics; null clears the binding.",
+    )
+
+
+class FolderPathRequest(BaseModel):
+    path: str = Field(..., min_length=1, description="Wiki-relative folder path.")
+
+
+class NodeMoveRequest(BaseModel):
+    destination: str = Field(..., min_length=1, description="Wiki-relative destination path for the page file.")
+
+
+class FolderMoveRequest(BaseModel):
+    source: str = Field(..., min_length=1)
+    destination: str = Field(..., min_length=1)
+
+
+def wql_execute_response_examples() -> dict[str, Any]:
+    return {
+        200: {
+            "description": (
+                "WQL result. Shape depends on the statement: `SCHEMA` returns `schema`; "
+                "mutations often return `status`; `SELECT` and `SEARCH` return row or hit data."
+            ),
+            "content": {
+                "application/json": {
+                    "examples": {
+                        "schema": {
+                            "summary": "SCHEMA",
+                            "value": {"schema": "# WiseDB WQL\n..."},
+                        },
+                        "mutation": {
+                            "summary": "INSERT / UPDATE / DELETE",
+                            "value": {"status": "ok"},
+                        },
+                    }
+                }
+            },
+        },
+        401: {"description": "Missing, invalid, or expired session."},
+        403: {"description": "No database access or insufficient privilege for the WQL statement."},
+        404: {"description": "Database not found."},
+        422: {"description": "Invalid database name or WQL syntax/semantics."},
+    }

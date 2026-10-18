@@ -1,90 +1,33 @@
-"""Параметры приложения (переменные окружения WISEDB_*)."""
+"""WiseDB HTTP server configuration."""
 
 from __future__ import annotations
 
-from typing import Any, Optional
-
+from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+SYSTEM_WIKI_DATABASE = "_wiki"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="WISEDB_", extra="ignore")
 
-    api_key: Optional[str] = Field(
-        default=None,
-        description="Админ-ключ для /v1/databases/* (создание/список/удаление).",
-    )
-    data_dir: Optional[str] = Field(
-        default=None,
-        description="Корень данных: catalog.sqlite и databases/{id}/; по умолчанию родитель sqlite_path или /app/data.",
-    )
-    bootstrap_default_db: bool = Field(
-        default=True,
-        description="Если каталог пуст — при старте создать базу 'default'.",
-    )
-    default_db_password: str = Field(
-        default="",
-        description="Пароль для создаваемой при старте базы 'default' (пусто — без пароля).",
-    )
-    embedding_model: Optional[str] = None
-    log_level: str = "INFO"
-    hnsw_max_elements: int = 2_000_000
-    hnsw_ef: int = 64
-    hnsw_m: int = 32
-    sqlite_path: Optional[str] = Field(default=None)
-    library_path: Optional[str] = Field(
-        default=None,
-        description="Гибрид: чанки и вложения на диске; SQLite хранит в основном рёбра.",
-    )
-    sleep_reinforce_on_retrieve: bool = Field(
-        default=False,
-        description="При true retrieve помечает wisedb_last_reinforced_at на внутренних рёбрах из выдачи.",
-    )
-    sleep_llm_api_key: Optional[str] = Field(
-        default=None,
-        repr=False,
-        description="Опциональный ключ OpenAI-совместимого API для фазы sleep llm_optimize.",
-    )
-    sleep_llm_base_url: str = Field(
-        default="https://api.openai.com/v1",
-        description="Базовый URL OpenAI-совместимого API для llm_optimize.",
-    )
-    sleep_llm_model: str = Field(
-        default="gpt-4o-mini",
-        description="Имя модели для llm_optimize.",
-    )
+    data_dir: Path = Path("./data")
+    host: str = "127.0.0.1"
+    port: int = 8000
+    root_password: str = ""
+    system_wiki: bool = True
 
-    def resolved_data_dir(self) -> str:
-        if self.data_dir:
-            return self.data_dir
-        if self.sqlite_path:
-            return str(Path(self.sqlite_path).parent)
-        return "/app/data"
+    @property
+    def catalog_dir(self) -> Path:
+        return self.data_dir / "_catalog"
 
-    @field_validator("library_path", mode="before")
-    @classmethod
-    def _library_empty(cls, v: Any) -> Optional[str]:
-        if v is None or v == "":
-            return None
-        return str(v)
-
-    @field_validator("sqlite_path", mode="before")
-    @classmethod
-    def _sqlite_empty_off(cls, v: Any) -> Optional[str]:
-        if v is None or v == "":
-            return None
-        return str(v)
-
-    @field_validator("sleep_llm_api_key", mode="before")
-    @classmethod
-    def _sleep_llm_api_key_empty(cls, v: Any) -> Optional[str]:
-        if v is None or v == "":
-            return None
-        return str(v)
+    def database_root(self, name: str) -> Path:
+        return self.data_dir / "databases" / name
 
 
+@lru_cache
 def get_settings() -> Settings:
     return Settings()

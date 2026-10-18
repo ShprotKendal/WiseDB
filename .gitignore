@@ -10,6 +10,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+*.so
+src/wisedb/_engine.c
 .pytest_cache/
 .coverage
 htmlcov/

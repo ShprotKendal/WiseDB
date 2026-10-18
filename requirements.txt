@@ -1,2 +1,2 @@
-# Editable: viz + сервер в RAM + MCP + dev
--e .[viz,server,mcp,dev]
+# Editable install: server + MCP + dev
+-e .[server,mcp,dev]

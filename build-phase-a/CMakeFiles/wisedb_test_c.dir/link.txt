@@ -1,0 +1,1 @@
+/usr/bin/clang -g -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/wisedb_test_c.dir/tests/c/test_core.c.o -o wisedb_test_c  libwisedb_core.a -lm
